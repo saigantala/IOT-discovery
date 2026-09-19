@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: secureiot-db
+    environment:
+      POSTGRES_DB: secureiot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: secureiot-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+
+  ml-service:
+    build: ./ml-service
+    container_name: secureiot-ml
+    ports:
+      - "5005:5005"
+    restart: always
+
+  backend:
+    build: ./backend
+    container_name: secureiot-backend
+    # Using host network mode to allow ARP scanning for local devices
+    network_mode: "host"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/secureiot
+      - PORT=4000
+      - JWT_ACCESS_SECRET=your_super_secret_access_key
+      - JWT_REFRESH_SECRET=your_super_secret_refresh_key
+      - ML_SERVICE_URL=http://localhost:5005
+      - MQTT_BROKER_URL=mqtt://localhost:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+
+volumes:
+  postgres_data:

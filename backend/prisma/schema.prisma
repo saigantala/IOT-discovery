@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  SUSPICIOUS
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  role          Role           @default(VIEWER)
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+model Device {
+  id             String         @id @default(uuid())
+  deviceId       String         @unique @map("device_id")
+  name           String
+  type           String
+  ipAddress      String?        @map("ip_address")
+  status         DeviceStatus   @default(ONLINE)
+  lastSeen       DateTime       @default(now()) @map("last_seen")
+  isQuarantined  Boolean        @default(false) @map("is_quarantined")
+  trafficEvents  TrafficEvent[]
+  alerts         Alert[]
+
+  @@map("devices")
+}
+
+model TrafficEvent {
+  id            String   @id @default(uuid())
+  deviceId      String   @map("device_id")
+  device        Device   @relation(fields: [deviceId], references: [deviceId])
+  packetRate    Float    @map("packet_rate")
+  destDiversity Int      @map("dest_diversity")
+  portDiversity Int      @map("port_diversity")
+  mqttFreq      Float    @map("mqtt_freq")
+  riskScore     Float    @map("risk_score")
+  isAnomaly     Boolean  @map("is_anomaly")
+  createdAt     DateTime @default(now()) @map("created_at")
+  alerts        Alert[]
+
+  @@map("traffic_events")
+}
+
+model Alert {
+  id             String       @id @default(uuid())
+  deviceId       String       @map("device_id")
+  device         Device       @relation(fields: [deviceId], references: [deviceId])
+  trafficEventId String?      @map("traffic_event_id")
+  trafficEvent   TrafficEvent? @relation(fields: [trafficEventId], references: [id])
+  riskScore      Float        @map("risk_score")
+  attackType     String       @map("attack_type")
+  severity       Severity     @default(MEDIUM)
+  status         AlertStatus  @default(OPEN)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("alerts")
+}
