@@ -16,7 +16,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.network.RetrofitClient
 import com.example.utils.ConfigManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -26,6 +28,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val configManager = remember { ConfigManager(context) }
+    val scope = rememberCoroutineScope()
     
     var notificationsEnabled by remember { mutableStateOf(true) }
     var autoScanEnabled by remember { mutableStateOf(true) }
@@ -34,6 +37,33 @@ fun SettingsScreen(
     
     var showIpDialog by remember { mutableStateOf(false) }
     var backendIp by remember { mutableStateOf(configManager.getBackendIp()) }
+    var isTestingConnection by remember { mutableStateOf(false) }
+    var testResultText by remember { mutableStateOf<String?>(null) }
+    var testResultSuccess by remember { mutableStateOf(false) }
+
+    fun runTestConnection(targetIp: String) {
+        isTestingConnection = true
+        testResultText = null
+        scope.launch {
+            try {
+                val api = RetrofitClient.getApiService(context)
+                val response = api.checkHealth()
+                if (response.isSuccessful && response.body()?.status == "OK") {
+                    val dbStatus = response.body()?.database?.status ?: "connected"
+                    testResultSuccess = true
+                    testResultText = "✅ Connection Successful! Server Online | Database: $dbStatus"
+                } else {
+                    testResultSuccess = false
+                    testResultText = "❌ Server Error (${response.code()}): ${response.errorBody()?.string() ?: "Unreachable"}"
+                }
+            } catch (e: Exception) {
+                testResultSuccess = false
+                testResultText = "❌ Connection Failed: ${e.message ?: "Unable to connect to http://$targetIp:4000/health"}"
+            } finally {
+                isTestingConnection = false
+            }
+        }
+    }
 
     if (showIpDialog) {
         var tempIp by remember { mutableStateOf(backendIp) }
@@ -55,6 +85,7 @@ fun SettingsScreen(
                         onValueChange = {
                             tempIp = it
                             isError = !configManager.isValidIpAddress(it)
+                            testResultText = null
                         },
                         label = { Text("Backend IP Address") },
                         placeholder = { Text("e.g. ${ConfigManager.DEFAULT_IP}") },
@@ -77,6 +108,38 @@ fun SettingsScreen(
                             .padding(top = 4.dp),
                         singleLine = true
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (isTestingConnection) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Testing connection to http://$tempIp:4000/health...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else if (testResultText != null) {
+                        Text(
+                            text = testResultText!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (testResultSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            configManager.setBackendIp(tempIp)
+                            runTestConnection(tempIp)
+                        },
+                        enabled = configManager.isValidIpAddress(tempIp) && !isTestingConnection,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.NetworkCheck, contentDescription = "Test")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Test Connection (/health)")
+                    }
                 }
             },
             confirmButton = {

@@ -4,6 +4,20 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
+data class ApiResponse<T>(
+    val success: Boolean = true,
+    val data: T? = null,
+    val error: ApiErrorDetail? = null,
+    val requestId: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ApiErrorDetail(
+    val code: String? = "ERROR",
+    val message: String? = "An unknown error occurred"
+)
+
+@JsonClass(generateAdapter = true)
 data class RegisterRequest(
     val name: String,
     val email: String,
@@ -17,8 +31,7 @@ data class LoginRequest(
 )
 
 @JsonClass(generateAdapter = true)
-data class AuthResponse(
-    val success: Boolean,
+data class AuthResponseData(
     val accessToken: String?,
     val refreshToken: String?,
     val user: UserDto?
@@ -33,15 +46,25 @@ data class UserDto(
 )
 
 @JsonClass(generateAdapter = true)
-data class GenericResponse(
-    val success: Boolean,
-    val message: String
+data class GenericMessage(
+    val message: String? = null,
+    val count: Int? = null,
+    val syncedCount: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class UserResponse(
-    val success: Boolean,
-    val data: UserDto
+data class HealthDatabaseInfo(
+    val status: String? = null,
+    val name: String? = null,
+    val latencyMs: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class HealthStatus(
+    val status: String? = null,
+    val server: String? = null,
+    val timestamp: String? = null,
+    val database: HealthDatabaseInfo? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -55,13 +78,6 @@ data class AlertDto(
     val severity: String?,
     val status: String?,
     val createdAt: String?
-)
-
-@JsonClass(generateAdapter = true)
-data class AlertListResponse(
-    val success: Boolean,
-    val data: List<AlertDto>,
-    val page: Int
 )
 
 @JsonClass(generateAdapter = true)

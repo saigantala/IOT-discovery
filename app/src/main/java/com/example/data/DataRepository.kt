@@ -36,25 +36,26 @@ class DataRepository(private val context: Context) {
      */
     suspend fun refreshDevicesFromApi(): Result<List<Device>> = withContext(Dispatchers.IO) {
         try {
-            Log.d("DataRepo", "🔄 Fetching live devices from REST API...")
+            Log.d("DataRepo", "🔄 [API REQUEST] GET /api/v1/devices")
             val response = RetrofitClient.getApiService(context).getDevices()
-            if (response.isSuccessful) {
-                val dtos = response.body() ?: emptyList()
+            if (response.isSuccessful && response.body()?.success == true) {
+                val dtos = response.body()?.data ?: emptyList()
                 val entities = dtos.map { it.toRoomEntity() }
-                Log.d("DataRepo", "✅ Received ${entities.size} devices from REST API. Updating Room offline cache.")
+                Log.d("DataRepo", "✅ [API SUCCESS] Received ${entities.size} devices. Updating Room offline cache.")
                 deviceDao.insertDevices(entities)
                 _lastError.value = null
                 Result.success(entities)
             } else {
-                val errorBody = response.errorBody()?.string() ?: "Unknown API Error"
-                val msg = "API Error ${response.code()}: $errorBody"
-                Log.e("DataRepo", "❌ $msg")
+                val errObj = response.body()?.error
+                val errBody = response.errorBody()?.string()
+                val msg = "API Error ${response.code()}: ${errObj?.message ?: errBody ?: "Unknown"}"
+                Log.e("DataRepo", "❌ [API ERROR] $msg")
                 _lastError.value = msg
                 Result.failure(Exception(msg))
             }
         } catch (e: Exception) {
             val msg = "Network Exception: ${e.message}"
-            Log.e("DataRepo", "❌ $msg", e)
+            Log.e("DataRepo", "❌ [API EXCEPTION] $msg", e)
             _lastError.value = msg
             Result.failure(e)
         }
@@ -136,27 +137,26 @@ class DataRepository(private val context: Context) {
                                 }
                             )
                             withContext(Dispatchers.IO) {
-                                Log.d("DataRepo", "📡 Syncing ${devicesToSave.size} discovered devices to REST API...")
+                                Log.d("DataRepo", "📡 [API REQUEST] POST /api/v1/devices/sync (${devicesToSave.size} devices)")
                                 val response = RetrofitClient.getApiService(context).syncDevices(syncRequest)
-                                if (response.isSuccessful) {
-                                    Log.d("DataRepo", "✅ Device sync confirmed by backend! Response Code: ${response.code()}")
+                                if (response.isSuccessful && response.body()?.success == true) {
+                                    Log.d("DataRepo", "✅ [API SUCCESS] Device sync confirmed by backend! Response Code: ${response.code()}")
                                 } else {
-                                    val errBody = response.errorBody()?.string() ?: "Empty error body"
+                                    val errBody = response.errorBody()?.string() ?: response.body()?.error?.message ?: "Empty error"
                                     val errMsg = "Device sync rejected by server (Code ${response.code()}): $errBody"
-                                    Log.e("DataRepo", "❌ $errMsg")
+                                    Log.e("DataRepo", "❌ [API ERROR] $errMsg")
                                     _lastError.value = errMsg
                                 }
                             }
                         } catch (e: Exception) {
                             val errMsg = "Failed to reach REST API during device sync: ${e.message}"
-                            Log.e("DataRepo", "❌ $errMsg", e)
+                            Log.e("DataRepo", "❌ [API EXCEPTION] $errMsg", e)
                             _lastError.value = errMsg
                         }
                     }
                 }
                 is LocalNetworkScanner.ScanResult.Finished -> {
                     _scanProgress.value = 1f
-                    // Trigger a refresh from backend after discovery finishes
                     refreshDevicesFromApi()
                 }
                 is LocalNetworkScanner.ScanResult.Error -> {
@@ -171,48 +171,49 @@ class DataRepository(private val context: Context) {
 
     suspend fun quarantineDevice(deviceId: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            Log.d("DataRepo", "🔒 Requesting quarantine for device: $deviceId")
+            Log.d("DataRepo", "🔒 [API REQUEST] POST /api/v1/devices/$deviceId/quarantine")
             val response = RetrofitClient.getApiService(context).quarantineDevice(deviceId)
-            if (response.isSuccessful) {
-                Log.d("DataRepo", "✅ Device $deviceId successfully quarantined on backend.")
+            if (response.isSuccessful && response.body()?.success == true) {
+                Log.d("DataRepo", "✅ [API SUCCESS] Device $deviceId quarantined.")
                 refreshDevicesFromApi()
                 Result.success(true)
             } else {
                 val err = "Quarantine failed (${response.code()}): ${response.errorBody()?.string()}"
-                Log.e("DataRepo", "❌ $err")
+                Log.e("DataRepo", "❌ [API ERROR] $err")
                 Result.failure(Exception(err))
             }
         } catch (e: Exception) {
-            Log.e("DataRepo", "❌ Quarantine exception: ${e.message}", e)
+            Log.e("DataRepo", "❌ [API EXCEPTION] Quarantine error: ${e.message}", e)
             Result.failure(e)
         }
     }
 
     suspend fun fetchAlertsFromApi(): Result<List<AlertItem>> = withContext(Dispatchers.IO) {
         try {
-            Log.d("DataRepo", "🔄 Fetching live alerts from REST API...")
+            Log.d("DataRepo", "🔄 [API REQUEST] GET /api/v1/alerts")
             val response = RetrofitClient.getApiService(context).getAlerts()
-            if (response.isSuccessful) {
-                val dtos = response.body() ?: emptyList()
+            if (response.isSuccessful && response.body()?.success == true) {
+                val dtos = response.body()?.data ?: emptyList()
                 val items = dtos.map { it.toAlertItem() }
-                Log.d("DataRepo", "✅ Received ${items.size} alerts from REST API.")
+                Log.d("DataRepo", "✅ [API SUCCESS] Received ${items.size} alerts.")
                 Result.success(items)
             } else {
                 val err = "Alerts API Error (${response.code()}): ${response.errorBody()?.string()}"
-                Log.e("DataRepo", "❌ $err")
+                Log.e("DataRepo", "❌ [API ERROR] $err")
                 Result.failure(Exception(err))
             }
         } catch (e: Exception) {
-            Log.e("DataRepo", "❌ Alerts API Exception: ${e.message}", e)
+            Log.e("DataRepo", "❌ [API EXCEPTION] Alerts error: ${e.message}", e)
             Result.failure(e)
         }
     }
 
     suspend fun fetchDashboardSummary(): Result<DashboardSummary> = withContext(Dispatchers.IO) {
         try {
+            Log.d("DataRepo", "🔄 [API REQUEST] GET /api/v1/dashboard/summary")
             val response = RetrofitClient.getApiService(context).getDashboardSummary()
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
+                Result.success(response.body()!!.data!!)
             } else {
                 Result.failure(Exception("Dashboard summary error: ${response.code()}"))
             }

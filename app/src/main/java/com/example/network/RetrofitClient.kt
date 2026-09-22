@@ -17,7 +17,9 @@ object RetrofitClient {
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private fun createOkHttpClient() = OkHttpClient.Builder()
+    private fun createOkHttpClient(context: Context) = OkHttpClient.Builder()
+        .addInterceptor(AuthInterceptor(context))
+        .authenticator(TokenAuthenticator(context))
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         })
@@ -30,7 +32,7 @@ object RetrofitClient {
             currentUrl = baseUrl
             instance = Retrofit.Builder()
                 .baseUrl(baseUrl)
-                .client(createOkHttpClient())
+                .client(createOkHttpClient(context.applicationContext))
                 .addConverterFactory(MoshiConverterFactory.create(createMoshi()))
                 .build()
                 .create(ApiService::class.java)
@@ -38,6 +40,5 @@ object RetrofitClient {
         return instance!!
     }
 
-    // For compatibility with AppModule if needed, though getApiService(context) is safer
     val apiService: ApiService get() = instance ?: throw IllegalStateException("Call getApiService(context) first")
 }
