@@ -94,7 +94,5 @@ CREATE TABLE "alerts" (
     "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add initial admin user (Password: Admin@123456)
-INSERT INTO "users" (name, email, password_hash, role)
-VALUES ('Admin User', 'admin@example.com', '$2b$10$e5XzLd8yL8qE/aHjU2Yy3.4oHjE3k5p4M8A8s7P6k5j4M3a2P1b0', 'ADMIN')
-ON CONFLICT (email) DO NOTHING;
+-- Create users through POST /api/v1/auth/register.
+-- Do not ship a known default administrator password in source control.

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -21,6 +20,7 @@ import com.example.ui.screens.devices.DevicesScreen
 import com.example.ui.screens.fingerprints.FingerprintsScreen
 import com.example.ui.screens.history.LoginHistoryScreen
 import com.example.ui.screens.login.LoginScreen
+import com.example.ui.screens.register.RegisterScreen
 import com.example.ui.screens.logs.DiscoveryLogsScreen
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.reports.ReportsScreen
@@ -44,8 +44,10 @@ fun MainAppScaffold(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: NavRoute.Splash.route
 
-    // Hide Top/Bottom bars on Splash & Login
-    val isAuthOrSplash = currentRoute == NavRoute.Splash.route || currentRoute == NavRoute.Login.route
+    // Hide Top/Bottom bars on Splash, Login, & Register
+    val isAuthOrSplash = currentRoute == NavRoute.Splash.route || 
+                        currentRoute == NavRoute.Login.route || 
+                        currentRoute == NavRoute.Register.route
 
     val screenTitles = mapOf(
         NavRoute.Dashboard.route to "Dashboard",
@@ -150,6 +152,22 @@ fun MainAppScaffold(
                             navController.navigate(NavRoute.Dashboard.route) {
                                 popUpTo(NavRoute.Login.route) { inclusive = true }
                             }
+                        },
+                        onNavigateToRegister = {
+                            navController.navigate(NavRoute.Register.route)
+                        }
+                    )
+                }
+
+                composable(NavRoute.Register.route) {
+                    RegisterScreen(
+                        onRegisterSuccess = {
+                            navController.navigate(NavRoute.Login.route) {
+                                popUpTo(NavRoute.Register.route) { inclusive = true }
+                            }
+                        },
+                        onNavigateToLogin = {
+                            navController.popBackStack()
                         }
                     )
                 }
@@ -180,7 +198,7 @@ fun MainAppScaffold(
                         onSelectDevice = { deviceId ->
                             navController.navigate(NavRoute.DeviceDetails.createRoute(deviceId))
                         },
-                        onStartScan = { /* mock scan triggered */ }
+                        onStartScan = { navController.navigate(NavRoute.Scanning.route) }
                     )
                 }
 

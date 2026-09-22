@@ -3,6 +3,7 @@ package com.example.ui.navigation
 sealed class NavRoute(val route: String) {
     object Splash : NavRoute("splash")
     object Login : NavRoute("login")
+    object Register : NavRoute("register")
     object Dashboard : NavRoute("dashboard")
     object Devices : NavRoute("devices")
     object DeviceDetails : NavRoute("device_details/{deviceId}") {

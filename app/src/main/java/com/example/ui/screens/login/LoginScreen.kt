@@ -1,5 +1,6 @@
 package com.example.ui.screens.login
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -8,27 +9,43 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import com.example.di.AppModule
+import com.example.model.LoginRequest
+import com.example.network.TokenManager
 import com.example.utils.BiometricHelper
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    onNavigateToRegister: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     val credentialsManager = remember { AppModule.getCredentialsManager(context) }
+    val scope = rememberCoroutineScope()
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var isLoggingIn by rememberSaveable { mutableStateOf(false) }
+    var loginError by rememberSaveable { mutableStateOf<String?>(null) }
 
     Surface(
         modifier = Modifier
@@ -106,12 +123,63 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Google Sign-In Button Placeholder
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; loginError = null },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; loginError = null },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    loginError?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     OutlinedButton(
                         onClick = {
-                            credentialsManager.saveApiToken("google_oauth_token_placeholder")
-                            onLoginSuccess()
+                            if (email.isBlank() || password.isBlank()) {
+                                loginError = "Enter both email and password."
+                                return@OutlinedButton
+                            }
+                            scope.launch {
+                                isLoggingIn = true
+                                try {
+                                    val response = AppModule.getApiService(context)
+                                        .login(LoginRequest(email.trim(), password))
+                                    val auth = response.body()?.data
+                                    if (response.isSuccessful && response.body()?.success == true &&
+                                        auth?.accessToken != null && auth.refreshToken != null) {
+                                        TokenManager(context.applicationContext)
+                                            .saveTokens(auth.accessToken, auth.refreshToken)
+                                        credentialsManager.saveLiveCredential("login_method", "password")
+                                        onLoginSuccess()
+                                    } else {
+                                        loginError = response.body()?.error?.message
+                                            ?: "Login failed (HTTP ${response.code()})."
+                                    }
+                                } catch (error: Exception) {
+                                    loginError = "Cannot reach backend: ${error.message}"
+                                } finally {
+                                    isLoggingIn = false
+                                }
+                            }
                         },
+                        enabled = !isLoggingIn,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -126,14 +194,7 @@ fun LoginScreen(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "G ",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Sign in with Google Workspace",
+                                text = if (isLoggingIn) "Signing in…" else "Sign in",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -183,6 +244,18 @@ fun LoginScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Don't have an account? Register Here",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable { onNavigateToRegister() }
+                            .padding(8.dp)
+                    )
                 }
             }
 

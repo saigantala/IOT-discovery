@@ -2,8 +2,15 @@ import find from 'local-devices';
 import { pool } from '../config/db';
 import { socketService } from './socket.service';
 
+const AUTO_DISCOVERY_ENABLED = process.env.AUTO_DISCOVERY_ENABLED !== 'false';
+
 export class DiscoveryService {
   static async scanNetwork() {
+    if (!AUTO_DISCOVERY_ENABLED) {
+      console.log('🔍 [BACKEND AUTO-DISCOVERY] Auto-discovery is disabled via AUTO_DISCOVERY_ENABLED=false flag.');
+      return;
+    }
+
     console.log('\n🔍 [BACKEND AUTO-DISCOVERY] Starting Background Network Discovery...');
 
     try {
@@ -26,7 +33,8 @@ export class DiscoveryService {
           RETURNING *;
         `;
 
-        const result = await pool.query(query, [deviceId, name, d.ip, 'Hardware Node', 'ONLINE']);
+        // Keep this value compatible with Android's DeviceType enum and API DTOs.
+        const result = await pool.query(query, [deviceId, name, d.ip, 'UNKNOWN', 'ONLINE']);
         const updatedDevice = result.rows[0];
         console.log(`💾 [BACKEND AUTO-DISCOVERY] Saved device: ${updatedDevice.name} (${updatedDevice.ip_address}) [ID: ${updatedDevice.device_id}]`);
 
@@ -38,6 +46,10 @@ export class DiscoveryService {
   }
 
   static startAutoDiscovery() {
+    if (!AUTO_DISCOVERY_ENABLED) {
+      console.log('🔍 [BACKEND AUTO-DISCOVERY] Auto-discovery is disabled via environment configuration.');
+      return;
+    }
     this.scanNetwork();
     setInterval(() => this.scanNetwork(), 120000);
   }

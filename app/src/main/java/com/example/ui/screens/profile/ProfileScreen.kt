@@ -26,9 +26,16 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     viewModel: ProfileViewModel = viewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val deviceCount by viewModel.deviceCount.collectAsStateWithLifecycle()
     val wifiInfo by viewModel.wifiInfo.collectAsStateWithLifecycle()
     val systemStatus by viewModel.systemStatus.collectAsStateWithLifecycle()
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.loadProfile(context)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -61,14 +68,14 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Alex Morgan",
+                    text = userName,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
 
                 Text(
-                    text = "Lead Infrastructure Security Engineer",
+                    text = "Security Admin",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
@@ -172,7 +179,7 @@ fun ProfileScreen(
                     ProfileDetailRow(
                         icon = Icons.Default.Email,
                         label = "Admin Email",
-                        value = "alex.morgan@enterprise.io"
+                        value = userEmail
                     )
 
                     HorizontalDivider(
@@ -215,7 +222,9 @@ fun ProfileScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = onLogout,
+                    onClick = {
+                        viewModel.logout(context, onLogout)
+                    },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier
