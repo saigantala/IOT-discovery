@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { prisma } from './config/db';
+import { pool } from './config/db';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { socketService } from './services/socket.service';
@@ -18,7 +18,7 @@ const server = http.createServer(app);
 
 // 1. Middleware
 app.use(helmet());
-app.use(cors({ origin: ['http://localhost:3000', 'http://127.0.0.1:3000'], credentials: true }));
+app.use(cors({ origin: '*', credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json());
 
@@ -30,7 +30,7 @@ DiscoveryService.startAutoDiscovery();
 // 3. Health Check
 app.get('/health', async (req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await pool.query('SELECT 1');
     res.json({ status: 'OK', database: 'connected' });
   } catch (e) {
     res.status(500).json({ status: 'ERROR', database: 'disconnected' });
@@ -43,9 +43,9 @@ app.use('/api/v1', routes);
 // 5. Error Handling
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
-  console.log(`🚀 SecureIoT Shield Backend running on port ${PORT}`);
+const PORT = Number(process.env.PORT) || 4000;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on http://0.0.0.0:${PORT}`);
 });
 
 export { app, server };

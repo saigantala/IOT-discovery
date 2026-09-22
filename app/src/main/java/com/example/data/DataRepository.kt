@@ -5,10 +5,13 @@ import android.util.Log
 import com.example.discovery.LocalNetworkScanner
 import com.example.mock.MockData
 import com.example.model.*
+import com.example.network.RetrofitClient
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-class DataRepository(context: Context) {
+class DataRepository(private val context: Context) {
 
     private val deviceDao = AppDatabase.getDatabase(context).deviceDao()
     private val scanner = LocalNetworkScanner(context)
@@ -83,6 +86,26 @@ class DataRepository(context: Context) {
                             )
                         }
                         deviceDao.insertDevices(devicesToSave)
+
+                        // Sync with Backend
+                        try {
+                            val syncRequest = SyncDevicesRequest(
+                                devices = devicesToSave.map {
+                                    DeviceSyncDto(
+                                        deviceId = it.id,
+                                        name = it.name,
+                                        type = it.type.name,
+                                        ipAddress = it.ipAddress,
+                                        status = it.status.name
+                                    )
+                                }
+                            )
+                            withContext(Dispatchers.IO) {
+                                RetrofitClient.getApiService(context).syncDevices(syncRequest)
+                            }
+                        } catch (e: Exception) {
+                            Log.e("DataRepo", "Backend sync failed: ${e.message}")
+                        }
                     }
                 }
                 is LocalNetworkScanner.ScanResult.Finished -> {

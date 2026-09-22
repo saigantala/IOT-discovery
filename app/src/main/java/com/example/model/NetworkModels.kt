@@ -76,3 +76,17 @@ data class TrafficEvent(
     val riskScore: Double,
     val isAnomaly: Boolean
 )
+
+@JsonClass(generateAdapter = true)
+data class DeviceSyncDto(
+    val deviceId: String,
+    val name: String,
+    val type: String,
+    val ipAddress: String,
+    val status: String
+)
+
+@JsonClass(generateAdapter = true)
+data class SyncDevicesRequest(
+    val devices: List<DeviceSyncDto>
+)

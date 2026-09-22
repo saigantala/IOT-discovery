@@ -45,7 +45,7 @@ object AppModule {
     fun getNetworkNodes() = MockData.networkNodes
 
     // Real connections
-    fun getApiService() = RetrofitClient.apiService
+    fun getApiService(context: Context) = RetrofitClient.getApiService(context)
     fun getDatabase(context: Context) = AppDatabase.getDatabase(context)
     fun getGeminiService() = GeminiService
     fun getDiscoveryManager(context: Context) = NetworkDiscoveryManager(context)

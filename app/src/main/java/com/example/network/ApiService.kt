@@ -28,6 +28,9 @@ interface ApiService {
     @POST("devices/{id}/quarantine")
     suspend fun quarantineDevice(@Path("id") id: String): Response<GenericResponse>
 
+    @POST("devices/sync")
+    suspend fun syncDevices(@Body request: SyncDevicesRequest): Response<GenericResponse>
+
     // Alerts & Traffic
     @GET("alerts")
     suspend fun getAlerts(

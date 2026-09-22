@@ -1,20 +1,22 @@
 package com.example.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.utils.ConfigManager
 
 @Composable
 fun SettingsScreen(
@@ -22,10 +24,85 @@ fun SettingsScreen(
     onToggleDarkTheme: (Boolean) -> Unit,
     onNavigateToAbout: () -> Unit
 ) {
+    val context = LocalContext.current
+    val configManager = remember { ConfigManager(context) }
+    
     var notificationsEnabled by remember { mutableStateOf(true) }
     var autoScanEnabled by remember { mutableStateOf(true) }
     var cloudSyncEnabled by remember { mutableStateOf(true) }
     var selectedLanguage by remember { mutableStateOf("English (US)") }
+    
+    var showIpDialog by remember { mutableStateOf(false) }
+    var backendIp by remember { mutableStateOf(configManager.getBackendIp()) }
+
+    if (showIpDialog) {
+        var tempIp by remember { mutableStateOf(backendIp) }
+        var isError by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showIpDialog = false },
+            title = { Text("Server Connection Setup") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter the PC Wi-Fi IP address running the Node.js backend server:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = tempIp,
+                        onValueChange = {
+                            tempIp = it
+                            isError = !configManager.isValidIpAddress(it)
+                        },
+                        label = { Text("Backend IP Address") },
+                        placeholder = { Text("e.g. ${ConfigManager.DEFAULT_IP}") },
+                        isError = isError,
+                        supportingText = {
+                            if (isError) {
+                                Text(
+                                    text = "Invalid IPv4 address format (e.g. 172.30.116.78)",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                Text(
+                                    text = "Target API: http://${tempIp.ifEmpty { "IP" }}:4000/api/v1/",
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = configManager.setBackendIp(tempIp)
+                        if (success) {
+                            backendIp = configManager.getBackendIp()
+                            showIpDialog = false
+                            Toast.makeText(context, "Backend URL updated: ${configManager.getBaseUrl()}", Toast.LENGTH_LONG).show()
+                        } else {
+                            isError = true
+                        }
+                    },
+                    enabled = configManager.isValidIpAddress(tempIp)
+                ) {
+                    Text("Save & Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIpDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -35,6 +112,33 @@ fun SettingsScreen(
         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Backend Server Connection",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SettingClickRow(
+                        title = "Server IP Address",
+                        value = backendIp,
+                        subtitle = configManager.getBaseUrl(),
+                        icon = Icons.Default.Computer,
+                        onClick = { showIpDialog = true },
+                        testTag = "backend_ip_setting"
+                    )
+                }
+            }
+        }
+
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -141,6 +245,7 @@ fun SettingsScreen(
                     SettingClickRow(
                         title = "Language",
                         value = selectedLanguage,
+                        subtitle = null,
                         icon = Icons.Default.Language,
                         onClick = {},
                         testTag = "language_setting"
@@ -154,6 +259,7 @@ fun SettingsScreen(
                     SettingClickRow(
                         title = "About IoT Device Discovery",
                         value = "v2.5.0 Enterprise",
+                        subtitle = null,
                         icon = Icons.Default.Info,
                         onClick = onNavigateToAbout,
                         testTag = "about_app_setting"
@@ -217,6 +323,7 @@ private fun SettingToggleRow(
 private fun SettingClickRow(
     title: String,
     value: String,
+    subtitle: String? = null,
     icon: ImageVector,
     onClick: () -> Unit,
     testTag: String
@@ -241,12 +348,21 @@ private fun SettingClickRow(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
