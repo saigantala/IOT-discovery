@@ -35,11 +35,20 @@ class DashboardViewModel(
 
     init {
         observeData()
+        refreshLiveBackendData()
     }
 
     fun startScan() {
         viewModelScope.launch {
             repository.runNetworkDiscovery()
+        }
+    }
+
+    fun refreshLiveBackendData() {
+        viewModelScope.launch {
+            repository.refreshDevicesFromApi()
+            repository.fetchAlertsFromApi()
+            repository.fetchDashboardSummary()
         }
     }
 

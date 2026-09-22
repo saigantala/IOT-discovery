@@ -17,6 +17,7 @@ class DevicesViewModel(
 
     init {
         observeDevices()
+        refreshFromBackend()
     }
 
     private fun observeDevices() {
@@ -24,6 +25,12 @@ class DevicesViewModel(
             repository.getDevicesStream().collect { allDevices ->
                 _devices.value = allDevices
             }
+        }
+    }
+
+    fun refreshFromBackend() {
+        viewModelScope.launch {
+            repository.refreshDevicesFromApi()
         }
     }
 

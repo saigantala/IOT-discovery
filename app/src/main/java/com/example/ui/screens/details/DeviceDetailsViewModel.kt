@@ -27,8 +27,18 @@ class DeviceDetailsViewModel(
             }
         }
         
-        // In a real app, this would also be a stream from the repository
-        _events.value = AppModule.getTimelineEvents().filter { it.deviceId == deviceId }
+        viewModelScope.launch {
+            repository.getTimelineStream().collect { events ->
+                _events.value = events.filter { it.deviceId == deviceId }
+            }
+        }
+    }
+
+    fun quarantineDevice(deviceId: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.quarantineDevice(deviceId)
+            onResult(result.isSuccess)
+        }
     }
 
     fun scanAgain() {

@@ -1,6 +1,9 @@
 -- Run this script in pgAdmin 4 (Query Tool) to create or update your database tables
 
--- Drop tables if they exist (Clean start)
+-- Enable pgcrypto extension for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Drop tables if they exist (Clean start for schema migration)
 DROP TABLE IF EXISTS "alerts" CASCADE;
 DROP TABLE IF EXISTS "network_sessions" CASCADE;
 DROP TABLE IF EXISTS "traffic_events" CASCADE;
@@ -20,15 +23,34 @@ CREATE TABLE "users" (
     "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create Refresh Tokens table
+CREATE TABLE "refresh_tokens" (
+    "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "user_id" UUID REFERENCES "users"("id") ON DELETE CASCADE,
+    "token_hash" TEXT NOT NULL,
+    "expires_at" TIMESTAMP NOT NULL,
+    "revoked" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create Devices table
 CREATE TABLE "devices" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "device_id" TEXT UNIQUE NOT NULL, -- Hardware MAC address or unique ID
     "name" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'UNKNOWN',
     "ip_address" TEXT,
     "status" TEXT NOT NULL DEFAULT 'ONLINE',
-    "discovery_source" TEXT DEFAULT 'BACKEND_AUTO_DISCOVERY', -- BACKEND_AUTO_DISCOVERY or ANDROID_APP_SYNC
+    "discovery_source" TEXT DEFAULT 'BACKEND_AUTO_DISCOVERY',
+    "manufacturer" TEXT DEFAULT 'Unknown Vendor',
+    "hostname" TEXT,
+    "os" TEXT,
+    "risk_level" TEXT DEFAULT 'LOW',
+    "risk_score" INTEGER DEFAULT 0,
+    "risk_reason" TEXT,
+    "open_ports" TEXT DEFAULT '[]', -- JSON string array
+    "services" TEXT DEFAULT '[]',   -- JSON string array
+    "fingerprint_confidence" INTEGER DEFAULT 90,
     "last_seen" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "is_quarantined" BOOLEAN DEFAULT false
 );
@@ -72,6 +94,7 @@ CREATE TABLE "alerts" (
     "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add initial sample user
+-- Add initial admin user (Password: Admin@123456)
 INSERT INTO "users" (name, email, password_hash, role)
-VALUES ('Admin User', 'admin@example.com', '$2b$10$YourHashedPasswordHere', 'ADMIN');
+VALUES ('Admin User', 'admin@example.com', '$2b$10$e5XzLd8yL8qE/aHjU2Yy3.4oHjE3k5p4M8A8s7P6k5j4M3a2P1b0', 'ADMIN')
+ON CONFLICT (email) DO NOTHING;

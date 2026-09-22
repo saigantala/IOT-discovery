@@ -19,6 +19,13 @@ class AlertsViewModel(
 
     init {
         observeAlerts()
+        refreshAlerts()
+    }
+
+    fun refreshAlerts() {
+        viewModelScope.launch {
+            repository.fetchAlertsFromApi()
+        }
     }
 
     private fun observeAlerts() {
