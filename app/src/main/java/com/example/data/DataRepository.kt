@@ -41,7 +41,8 @@ class DataRepository(private val context: Context) {
             if (response.isSuccessful && response.body()?.success == true) {
                 val dtos = response.body()?.data ?: emptyList()
                 val entities = dtos.map { it.toRoomEntity() }
-                Log.d("DataRepo", "✅ [API SUCCESS] Received ${entities.size} devices. Updating Room offline cache.")
+                Log.d("DataRepo", "✅ [API SUCCESS] Received ${entities.size} devices. Clearing stale cache and updating Room.")
+                deviceDao.clearAll()
                 deviceDao.insertDevices(entities)
                 _lastError.value = null
                 Result.success(entities)
@@ -69,104 +70,107 @@ class DataRepository(private val context: Context) {
         _scannedIpsCount.value = 0
         _lastError.value = null
         
-        scanner.startScan().collect { result ->
-            when (result) {
-                is LocalNetworkScanner.ScanResult.Progress -> {
-                    _scanProgress.value = result.percentage
-                    _scannedIpsCount.value = result.scannedCount
-                    
-                    if (result.newDevices.isNotEmpty()) {
-                        _currentScanDevices.value = _currentScanDevices.value + result.newDevices
+        try {
+            scanner.startScan().collect { result ->
+                when (result) {
+                    is LocalNetworkScanner.ScanResult.Progress -> {
+                        _scanProgress.value = result.percentage
+                        _scannedIpsCount.value = result.scannedCount
                         
-                        val devicesToSave = result.newDevices.map { discovered ->
-                            val type = mapHostnameToType(discovered.hostname, discovered.ip, discovered.respondingPort)
+                        if (result.newDevices.isNotEmpty()) {
+                            _currentScanDevices.value = _currentScanDevices.value + result.newDevices
                             
-                            val name = when {
-                                discovered.hostname.contains("Admin", true) || discovered.hostname.contains("Me", true) -> "Authorized Admin Mobile"
-                                discovered.hostname == "Main Network Gateway" -> "Primary Router/Gateway"
-                                discovered.hostname == "Network Asset" || discovered.hostname.isEmpty() || discovered.hostname.contains(discovered.ip) -> {
-                                    "${type.displayName} Node"
+                            val devicesToSave = result.newDevices.map { discovered ->
+                                val type = mapHostnameToType(discovered.hostname, discovered.ip, discovered.respondingPort)
+                                
+                                val name = when {
+                                    discovered.hostname.contains("Admin", true) || discovered.hostname.contains("Me", true) -> "Authorized Admin Mobile"
+                                    discovered.hostname == "Main Network Gateway" -> "Primary Router/Gateway"
+                                    discovered.hostname == "Network Asset" || discovered.hostname.isEmpty() || discovered.hostname.contains(discovered.ip) -> {
+                                        "${type.displayName} Node"
+                                    }
+                                    else -> discovered.hostname
                                 }
-                                else -> discovered.hostname
+                                
+                                val isSuspicious = discovered.hostname.lowercase().contains("unknown") || 
+                                                  (discovered.respondingPort != null && (discovered.respondingPort == 22 || discovered.respondingPort == 23))
+
+                                Device(
+                                    id = discovered.ip.replace(".", "_"),
+                                    name = name,
+                                    type = type,
+                                    manufacturer = discovered.manufacturer,
+                                    ipAddress = discovered.ip,
+                                    macAddress = discovered.ip.replace(".", "_"),
+                                    hostname = discovered.hostname,
+                                    os = when(type) {
+                                        DeviceType.LAPTOP -> "Desktop OS (Win/Mac)"
+                                        DeviceType.MOBILE -> "Mobile OS (Android/iOS)"
+                                        DeviceType.ROUTER -> "Gateway OS"
+                                        DeviceType.CAMERA -> "IP Cam Firmware"
+                                        else -> "Embedded Network Stack"
+                                    },
+                                    riskLevel = if (isSuspicious) RiskLevel.HIGH else RiskLevel.LOW,
+                                    status = if (isSuspicious) DeviceStatus.ROGUE else DeviceStatus.ONLINE,
+                                    lastSeen = "Active: Just now",
+                                    openPorts = if (discovered.respondingPort != null) listOf(discovered.respondingPort) else emptyList(),
+                                    services = emptyList(),
+                                    fingerprintConfidence = 90,
+                                    riskScore = if (isSuspicious) 40 else 0,
+                                    riskReason = "Discovered during active subnet sweep",
+                                    discoveryMethod = "Active Discovery"
+                                )
                             }
                             
-                            val isSuspicious = discovered.hostname.lowercase().contains("unknown") || 
-                                              (discovered.respondingPort != null && (discovered.respondingPort == 22 || discovered.respondingPort == 23))
+                            // 1. Cache locally in Room
+                            deviceDao.insertDevices(devicesToSave)
 
-                            Device(
-                                id = discovered.ip.replace(".", "_"),
-                                name = name,
-                                type = type,
-                                manufacturer = discovered.manufacturer,
-                                ipAddress = discovered.ip,
-                                macAddress = discovered.ip.replace(".", "_"),
-                                hostname = discovered.hostname,
-                                os = when(type) {
-                                    DeviceType.LAPTOP -> "Desktop OS (Win/Mac)"
-                                    DeviceType.MOBILE -> "Mobile OS (Android/iOS)"
-                                    DeviceType.ROUTER -> "Gateway OS"
-                                    DeviceType.CAMERA -> "IP Cam Firmware"
-                                    else -> "Embedded Network Stack"
-                                },
-                                riskLevel = if (isSuspicious) RiskLevel.HIGH else RiskLevel.LOW,
-                                status = if (isSuspicious) DeviceStatus.ROGUE else DeviceStatus.ONLINE,
-                                lastSeen = "Active: Just now",
-                                openPorts = if (discovered.respondingPort != null) listOf(discovered.respondingPort) else emptyList(),
-                                services = emptyList(),
-                                fingerprintConfidence = 90,
-                                riskScore = if (isSuspicious) 40 else 0,
-                                riskReason = "Discovered during active subnet sweep",
-                                discoveryMethod = "Active Discovery"
-                            )
-                        }
-                        
-                        // 1. Cache locally in Room
-                        deviceDao.insertDevices(devicesToSave)
-
-                        // 2. Sync immediately with REST API (Requirement 5)
-                        try {
-                            val syncRequest = SyncDevicesRequest(
-                                devices = devicesToSave.map {
-                                    DeviceSyncDto(
-                                        deviceId = it.id,
-                                        name = it.name,
-                                        type = it.type.name,
-                                        ipAddress = it.ipAddress,
-                                        status = it.status.name
-                                    )
+                            // 2. Sync immediately with REST API
+                            try {
+                                val syncRequest = SyncDevicesRequest(
+                                    devices = devicesToSave.map {
+                                        DeviceSyncDto(
+                                            deviceId = it.id,
+                                            name = it.name,
+                                            type = it.type.name,
+                                            ipAddress = it.ipAddress,
+                                            status = it.status.name
+                                        )
+                                    }
+                                )
+                                withContext(Dispatchers.IO) {
+                                    Log.d("DataRepo", "📡 [API REQUEST] POST /api/v1/devices/sync (${devicesToSave.size} devices)")
+                                    val response = RetrofitClient.getApiService(context).syncDevices(syncRequest)
+                                    if (response.isSuccessful && response.body()?.success == true) {
+                                        Log.d("DataRepo", "✅ [API SUCCESS] Device sync confirmed by backend! Response Code: ${response.code()}")
+                                    } else {
+                                        val errBody = response.errorBody()?.string() ?: response.body()?.error?.message ?: "Empty error"
+                                        val errMsg = "Device sync rejected by server (Code ${response.code()}): $errBody"
+                                        Log.e("DataRepo", "❌ [API ERROR] $errMsg")
+                                        _lastError.value = errMsg
+                                    }
                                 }
-                            )
-                            withContext(Dispatchers.IO) {
-                                Log.d("DataRepo", "📡 [API REQUEST] POST /api/v1/devices/sync (${devicesToSave.size} devices)")
-                                val response = RetrofitClient.getApiService(context).syncDevices(syncRequest)
-                                if (response.isSuccessful && response.body()?.success == true) {
-                                    Log.d("DataRepo", "✅ [API SUCCESS] Device sync confirmed by backend! Response Code: ${response.code()}")
-                                } else {
-                                    val errBody = response.errorBody()?.string() ?: response.body()?.error?.message ?: "Empty error"
-                                    val errMsg = "Device sync rejected by server (Code ${response.code()}): $errBody"
-                                    Log.e("DataRepo", "❌ [API ERROR] $errMsg")
-                                    _lastError.value = errMsg
-                                }
+                            } catch (e: Exception) {
+                                val errMsg = "Failed to reach REST API during device sync: ${e.message}"
+                                Log.e("DataRepo", "❌ [API EXCEPTION] $errMsg", e)
+                                _lastError.value = errMsg
                             }
-                        } catch (e: Exception) {
-                            val errMsg = "Failed to reach REST API during device sync: ${e.message}"
-                            Log.e("DataRepo", "❌ [API EXCEPTION] $errMsg", e)
-                            _lastError.value = errMsg
                         }
                     }
-                }
-                is LocalNetworkScanner.ScanResult.Finished -> {
-                    _scanProgress.value = 1f
-                    refreshDevicesFromApi()
-                }
-                is LocalNetworkScanner.ScanResult.Error -> {
-                    val errMsg = "Scan failure: ${result.message}"
-                    Log.e("DataRepo", "❌ $errMsg")
-                    _lastError.value = errMsg
+                    is LocalNetworkScanner.ScanResult.Finished -> {
+                        _scanProgress.value = 1f
+                        refreshDevicesFromApi()
+                    }
+                    is LocalNetworkScanner.ScanResult.Error -> {
+                        val errMsg = "Scan failure: ${result.message}"
+                        Log.e("DataRepo", "❌ $errMsg")
+                        _lastError.value = errMsg
+                    }
                 }
             }
+        } finally {
+            _isScanning.value = false
         }
-        _isScanning.value = false
     }
 
     suspend fun quarantineDevice(deviceId: String): Result<Boolean> = withContext(Dispatchers.IO) {
