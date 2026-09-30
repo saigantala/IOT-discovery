@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
 import com.example.discovery.LocalNetworkScanner
 import com.example.model.*
 import com.example.network.RetrofitClient
@@ -12,7 +13,8 @@ import kotlinx.coroutines.withContext
 
 class DataRepository(private val context: Context) {
 
-    private val deviceDao = AppDatabase.getDatabase(context).deviceDao()
+    private val db = AppDatabase.getDatabase(context)
+    private val deviceDao = db.deviceDao()
     private val scanner = LocalNetworkScanner(context)
 
     private val _scanProgress = MutableStateFlow(0f)
@@ -41,9 +43,14 @@ class DataRepository(private val context: Context) {
             if (response.isSuccessful && response.body()?.success == true) {
                 val dtos = response.body()?.data ?: emptyList()
                 val entities = dtos.map { it.toRoomEntity() }
-                Log.d("DataRepo", "✅ [API SUCCESS] Received ${entities.size} devices. Clearing stale cache and updating Room.")
-                deviceDao.clearAll()
-                deviceDao.insertDevices(entities)
+                Log.d("DataRepo", "✅ [API SUCCESS] Received ${entities.size} devices. Updating Room offline cache via transaction.")
+                
+                // Problem 3 Fix: Wrap in Room transaction to prevent UI flicker
+                db.withTransaction {
+                    deviceDao.clearAll()
+                    deviceDao.insertDevices(entities)
+                }
+
                 _lastError.value = null
                 Result.success(entities)
             } else {
