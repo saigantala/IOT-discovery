@@ -13,10 +13,10 @@ export class MLService {
     mqtt_freq: number;
   }) {
     try {
-      const response = await axios.post(`${ML_SERVICE_URL}/predict`, trafficData);
+      const response = await axios.post(`${ML_SERVICE_URL}/predict`, trafficData, { timeout: 3000 });
       return response.data;
     } catch (error) {
-      console.warn('⚠️ ML Service unreachable, using fallback logic');
+      console.warn('⚠️ [ML SERVICE] Python ML sidecar unreachable/timed out (3s), using fallback risk logic');
 
       // Fallback logic if the Python ML service is down
       const is_anomaly = trafficData.packet_rate > 500 || trafficData.port_diversity > 50;

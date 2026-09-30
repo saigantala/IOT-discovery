@@ -42,7 +42,7 @@ export const updateAlertStatus = async (req: Request, res: Response) => {
     const result = await pool.query(
       `UPDATE alerts
        SET status = $1
-       WHERE id::text = $2 OR device_id = $2
+       WHERE id::text = $2
        RETURNING *`,
       [newStatus, id]
     );

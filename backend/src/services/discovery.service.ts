@@ -23,8 +23,9 @@ export class DiscoveryService {
       console.log(`✅ [BACKEND AUTO-DISCOVERY] Scan complete. Found ${devices.length} real devices on server subnet.`);
 
       for (const d of devices) {
-        if (!d.mac || !d.ip) continue;
-        const deviceId = d.mac.toUpperCase();
+        if (!d.ip) continue;
+        // Match the device ID format used by the Android app (IP with underscores)
+        const deviceId = d.ip.replace(/\./g, '_');
         const name = d.name && d.name !== '?' ? d.name : `Server-Discovered Device (${d.ip})`;
 
         const query = `
@@ -39,6 +40,7 @@ export class DiscoveryService {
           RETURNING *;
         `;
 
+        // Keep this value compatible with Android's DeviceType enum and API DTOs.
         const result = await pool.query(query, [deviceId, name, d.ip, 'UNKNOWN', 'ONLINE']);
         const updatedDevice = result.rows[0];
         console.log(`💾 [BACKEND AUTO-DISCOVERY] Saved device: ${updatedDevice.name} (${updatedDevice.ip_address}) [ID: ${updatedDevice.device_id}]`);

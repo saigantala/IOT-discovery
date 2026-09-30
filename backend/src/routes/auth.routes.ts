@@ -7,7 +7,7 @@ const router = Router();
 router.post('/register', register);
 router.post('/login', login);
 router.post('/refresh', refresh);
-router.post('/logout', authenticateToken, logout);
+router.post('/logout', logout); // Unprotected so logout works even if access token is expired
 router.get('/me', authenticateToken, getMe);
 
 export default router;

@@ -7,9 +7,7 @@ import { toUserDto } from '../dtos/auth.dto';
 import { sendSuccess, sendError } from '../utils/responseEnvelope';
 import { registerSchema, loginSchema, refreshSchema } from '../validators/auth.validator';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
-
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'your_super_secret_access_key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your_super_secret_refresh_key';
+import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from '../config/secrets';
 
 export const register = async (req: Request, res: Response) => {
   const reqId = req.requestId;
@@ -186,8 +184,12 @@ export const logout = async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
 
   if (refreshToken) {
-    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    await pool.query('UPDATE refresh_tokens SET revoked = true WHERE token_hash = $1', [tokenHash]);
+    try {
+      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      await pool.query('UPDATE refresh_tokens SET revoked = true WHERE token_hash = $1', [tokenHash]);
+    } catch (e: any) {
+      console.warn(`[${reqId}] AUTH Logout non-fatal warning updating token: ${e.message}`);
+    }
   }
 
   console.log(`[${reqId}] AUTH User logged out successfully`);
