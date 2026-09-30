@@ -17,13 +17,14 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// 1. Core Security & Parsing Middleware
+// 1. Core Security & Body Parsing Middleware
 app.use(helmet());
 app.use(cors({ origin: '*', credentials: true }));
 app.use(morgan('dev')); // Keep morgan logging as requested
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// 2. Custom Detailed Request Logging Middleware (Requirement 4)
+// 2. Custom Detailed Request Logging Middleware
 app.use(detailedRequestLogger);
 
 // 3. Real-time & Network Services
@@ -31,7 +32,7 @@ socketService.init(server);
 mqttService.connect();
 DiscoveryService.startAutoDiscovery();
 
-// 4. Health Check Endpoint (Requirement 11)
+// 4. Health Check Endpoint
 app.get('/health', async (req, res) => {
   const startTime = Date.now();
   try {
@@ -70,7 +71,7 @@ app.use(errorHandler);
 
 const PORT = Number(process.env.PORT) || 4000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Backend running on http://0.0.0.0:${PORT}`);
+  console.log(`\n🚀 Backend listening on http://0.0.0.0:${PORT}`);
   console.log(`🏥 Health check endpoint available at http://0.0.0.0:${PORT}/health`);
 });
 

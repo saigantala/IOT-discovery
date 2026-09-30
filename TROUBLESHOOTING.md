@@ -1,53 +1,10 @@
-# IoT Discovery: Short Troubleshooting Guide
+# IoT Security System - Troubleshooting Guide
 
-## Normal startup
-
-Run the backend in its own terminal:
-
-```powershell
-cd "C:\Users\YETHENDRA SAI\AndroidStudioProjects\IOT\backend"
-npm run dev
-```
-
-It must remain open and display both `Backend running` and `PostgreSQL Connected successfully`.
-
-## Health check
-
-In a second terminal, run this exact command (do not paste `PS C:\...>`, `+`, or Markdown brackets):
-
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:4000/health"
-```
-
-If `Test-NetConnection 127.0.0.1 -Port 4000` is `False`, the backend is not running. Start it again in a separate terminal and leave that terminal open.
-
-## PostgreSQL errors
-
-`ECONNREFUSED 127.0.0.1:PORT` means the PostgreSQL port in `backend/.env` is wrong or the database service is stopped.
-
-```powershell
-Get-Service *postgres*
-netstat -ano | findstr LISTENING | findstr 543
-```
-
-Set `DATABASE_URL` to the port that is actually listening. On this machine PostgreSQL was found on port `5433`; do not use `5432` unless it is listening.
-
-## Physical Android device
-
-Use the PC's Wi-Fi IPv4 address, not `localhost`, `127.0.0.1`, or a virtual-network address. Find it with:
-
-```powershell
-ipconfig
-```
-
-Set the Android backend address to `http://YOUR_WIFI_IP:4000/api/v1/`, then open `http://YOUR_WIFI_IP:4000/health` in the phone browser. Both devices must be on the same Wi-Fi network.
-
-## Login verification
-
-Register a user first, then sign in using the Android email/password form. A successful login emits terminal logs for `POST /api/v1/auth/login`, the database lookup, and the response status. Passwords and tokens are intentionally masked in the logs.
-
-## Known project limits
-
-- Several visual screens still display demo/mock data. They need individual API-backed ViewModels before every screen is fully live.
-- Backend auto-discovery runs every two minutes and writes its own records. Those logs are server activity, not proof that the Android app reached the backend.
-- MQTT is intentionally disabled when `MQTT_ENABLED=false`; enable it only after installing/configuring a broker.
+| Issue / Error | Root Cause | Actionable Resolution |
+| :--- | :--- | :--- |
+| **`ECONNREFUSED 127.0.0.1:5433`** | PostgreSQL service is stopped or running on port 5432 instead of 5433. | 1. Open PowerShell as Administrator.<br>2. Run `Restart-Service -Name "postgresql*"`.<br>3. Verify port in `backend/.env` (`DATABASE_URL=postgresql://postgres:PASSWORD@127.0.0.1:5433/secureiot`). |
+| **Backend port 4000 not listening** | Node.js backend server is stopped or crashed. | 1. Open terminal: `cd backend`.<br>2. Run `npm run dev`.<br>3. Confirm terminal outputs: `Backend listening on http://0.0.0.0:4000`. |
+| **Phone cannot access backend** | Phone & PC on different Wi-Fi networks or wrong IP configured in settings. | 1. Connect phone to same Wi-Fi as PC.<br>2. Find PC IP via `ipconfig` (e.g. `172.30.116.78`).<br>3. Open App $\rightarrow$ **Settings** $\rightarrow$ **Backend Server IP**.<br>4. Enter IP, tap **Test Connection (/health)**, then tap **Save & Apply**. |
+| **Login fails (`INVALID_CREDENTIALS`)** | User email/password not registered or typo. | 1. Open App $\rightarrow$ Tap **Don't have an account? Register Here**.<br>2. Create a new user account (e.g. `admin@enterprise.io` / `Password123!`).<br>3. Retry login. |
+| **Missing database tables** | `database_setup.sql` has not been executed on the `secureiot` DB. | 1. Open pgAdmin 4 or psql.<br>2. Connect to `secureiot` database.<br>3. Run `database_setup.sql` script to create all 6 tables (`users`, `refresh_tokens`, `devices`, `network_sessions`, `traffic_events`, `alerts`). |
+| **MQTT broker unavailable warnings** | Mosquitto broker is not installed or stopped while `MQTT_ENABLED=true`. | Set `MQTT_ENABLED=false` in `backend/.env`. The system will run normally without MQTT. |

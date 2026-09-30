@@ -14,12 +14,18 @@ export class DiscoveryService {
     console.log('\n🔍 [BACKEND AUTO-DISCOVERY] Starting Background Network Discovery...');
 
     try {
-      const devices = await find();
+      // 10 second safety timeout so find() never hangs the Node.js event loop
+      const timeoutPromise = new Promise<any[]>((_, reject) =>
+        setTimeout(() => reject(new Error('Subnet ARP probe timeout (10s)')), 10000)
+      );
+
+      const devices = await Promise.race([find(), timeoutPromise]);
       console.log(`✅ [BACKEND AUTO-DISCOVERY] Scan complete. Found ${devices.length} real devices on server subnet.`);
 
       for (const d of devices) {
+        if (!d.mac || !d.ip) continue;
         const deviceId = d.mac.toUpperCase();
-        const name = d.name !== '?' ? d.name : `Server-Discovered Device (${d.ip})`;
+        const name = d.name && d.name !== '?' ? d.name : `Server-Discovered Device (${d.ip})`;
 
         const query = `
           INSERT INTO devices (device_id, name, ip_address, type, status, discovery_source, last_seen)
@@ -33,15 +39,14 @@ export class DiscoveryService {
           RETURNING *;
         `;
 
-        // Keep this value compatible with Android's DeviceType enum and API DTOs.
         const result = await pool.query(query, [deviceId, name, d.ip, 'UNKNOWN', 'ONLINE']);
         const updatedDevice = result.rows[0];
         console.log(`💾 [BACKEND AUTO-DISCOVERY] Saved device: ${updatedDevice.name} (${updatedDevice.ip_address}) [ID: ${updatedDevice.device_id}]`);
 
         socketService.emit('device_discovered', updatedDevice);
       }
-    } catch (error) {
-      console.error('❌ [BACKEND AUTO-DISCOVERY] Error during network discovery:', error);
+    } catch (error: any) {
+      console.warn('⚠️ [BACKEND AUTO-DISCOVERY] Subnet probe warning:', error.message || error);
     }
   }
 
