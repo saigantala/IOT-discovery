@@ -6,9 +6,13 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface ApiService {
-    // Health Check (Requirement 4 & 11)
+    // Health Check
     @GET("/health")
     suspend fun checkHealth(): Response<HealthStatus>
+
+    // Telemetry / Navigation
+    @POST("telemetry/screen")
+    suspend fun logNavigation(@Body body: Map<String, String>): Response<ApiResponse<GenericMessage>>
 
     // Auth
     @POST("auth/register")

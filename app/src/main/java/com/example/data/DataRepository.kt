@@ -9,6 +9,7 @@ import com.example.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DataRepository(private val context: Context) {
@@ -346,4 +347,17 @@ class DataRepository(private val context: Context) {
     }
 
     fun getCurrentWifiInfo(): WifiConnectionInfo? = scanner.getCurrentWifiInfo()
+
+    fun logScreenNavigation(screenName: String, route: String) {
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d("DataRepo", "📱 Logging tab navigation to backend: '$screenName' ($route)")
+                RetrofitClient.getApiService(context).logNavigation(
+                    mapOf("screenName" to screenName, "route" to route)
+                )
+            } catch (e: Exception) {
+                Log.w("DataRepo", "Navigation telemetry log exception: ${e.message}")
+            }
+        }
+    }
 }

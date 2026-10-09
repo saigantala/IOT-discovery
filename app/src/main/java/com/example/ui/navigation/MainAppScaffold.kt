@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.di.AppModule
 import com.example.ui.components.AppBottomNavigation
 import com.example.ui.components.AppNavigationDrawerContent
 import com.example.ui.components.AppTopBar
@@ -37,6 +39,8 @@ fun MainAppScaffold(
     isDarkTheme: Boolean,
     onToggleDarkTheme: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val repository = remember { AppModule.getRepository(context) }
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
@@ -50,24 +54,32 @@ fun MainAppScaffold(
                         currentRoute == NavRoute.Register.route
 
     val screenTitles = mapOf(
-        NavRoute.Dashboard.route to "Dashboard",
-        NavRoute.Devices.route to "Discovered Assets",
-        NavRoute.Topology.route to "Network Topology",
-        NavRoute.Fingerprints.route to "IoT Fingerprints",
+        NavRoute.Dashboard.route to "Dashboard Tab",
+        NavRoute.Devices.route to "Discovered Assets Tab",
+        NavRoute.Topology.route to "Network Topology Tab",
+        NavRoute.Fingerprints.route to "IoT Fingerprints Screen",
         NavRoute.DiscoveryLogs.route to "History Dashboard",
-        NavRoute.RogueDevices.route to "Rogue Devices Alert",
-        NavRoute.Timeline.route to "Activity Timeline",
-        NavRoute.Compliance.route to "Security Compliance",
-        NavRoute.Reports.route to "Enterprise Reports",
-        NavRoute.Alerts.route to "Security Alerts",
-        NavRoute.Settings.route to "Settings",
-        NavRoute.Profile.route to "Admin Profile",
-        NavRoute.About.route to "About System"
+        NavRoute.RogueDevices.route to "Rogue Devices Screen",
+        NavRoute.Timeline.route to "Activity Timeline Screen",
+        NavRoute.Compliance.route to "Security Compliance Screen",
+        NavRoute.Reports.route to "Enterprise Reports Screen",
+        NavRoute.Alerts.route to "Security Alerts Tab",
+        NavRoute.Settings.route to "Settings Tab",
+        NavRoute.Profile.route to "Admin Profile Screen",
+        NavRoute.About.route to "About System Screen",
+        NavRoute.Scanning.route to "Subnet Scanning Screen"
     )
 
     val currentTitle = when {
-        currentRoute.startsWith("device_details") -> "Device Details"
+        currentRoute.startsWith("device_details") -> "Device Details Screen"
         else -> screenTitles[currentRoute] ?: "IoT Discovery"
+    }
+
+    // Log Tab/Screen navigation to backend without saving to PostgreSQL
+    LaunchedEffect(currentRoute) {
+        if (!isAuthOrSplash) {
+            repository.logScreenNavigation(currentTitle, currentRoute)
+        }
     }
 
     val isTopLevelRoute = listOf(
