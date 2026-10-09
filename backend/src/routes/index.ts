@@ -6,14 +6,17 @@ import trafficRoutes from './traffic.routes';
 import sessionRoutes from './session.routes';
 import dashboardRoutes from './dashboard.routes';
 import { authenticateToken } from '../middleware/auth.middleware';
+import { syncDevices } from '../controllers/device.controller';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+// Allow mobile scanner to sync discovered devices over LAN
+router.post('/devices/sync', syncDevices);
 router.use('/devices', authenticateToken, deviceRoutes);
 router.use('/alerts', authenticateToken, alertRoutes);
 router.use('/dashboard', authenticateToken, dashboardRoutes);
-// Left open so simulator_client.py keeps working. Add a device API key before real use.
+// Left open so simulator_client.py keeps working
 router.use('/traffic', trafficRoutes);
 router.use('/sessions', sessionRoutes);
 

@@ -9,7 +9,7 @@ class ConfigManager(context: Context) {
     companion object {
         private const val KEY_BACKEND_IP = "backend_ip"
         // Current PC Wi-Fi IP address
-        const val DEFAULT_IP = "172.30.116.78"
+        const val DEFAULT_IP = "172.16.52.28"
     }
 
     fun getBackendIp(): String {
